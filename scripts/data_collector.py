@@ -191,7 +191,7 @@ def collect_all_kline(days=30, limit=100):
         if save_daily_kline(code):
             success += 1
         
-        time.sleep(0.5)  # 避免请求过快被限流
+        time.sleep(3)  # 避免请求过快被限流，从0.5秒增加到3秒
     
     print(f"日K线采集完成: {success}/{len(stock_codes)} 只成功")
     return success
