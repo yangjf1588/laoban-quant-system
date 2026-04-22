@@ -1,102 +1,73 @@
-# AKShare 常用接口速查
+# AKShare 数据接口测试报告
 
-**学习时间**: 2026-04-22
-**状态**: 待网络恢复后测试
+**测试时间**: 2026-04-22 23:42
+**状态**: 晚间限流严重，建议白天采集
 
 ---
 
-## 1. 股票列表
+## 可用接口 ✅
+
+| 接口 | 函数 | 数据量 | 备注 |
+|------|------|--------|------|
+| 股票列表 | stock_info_a_code_name | 5508条 | ✅ 可用 |
+| 涨停股 | stock_zt_pool_em | 55条 | ✅ 可用 |
+| 炸板股 | stock_zt_pool_zbg_em | 可用 | 待测 |
+| 跌停股 | stock_zt_pool_zdt_em | 可用 | 待测 |
+
+---
+
+## 限流接口 ⏳
+
+| 接口 | 函数 | 状态 | 建议 |
+|------|------|------|------|
+| 日K线 | stock_zh_a_hist | ❌ 限流 | 白天重试 |
+| 实时行情 | stock_zh_a_spot_em | ❌ 限流 | 白天重试 |
+| 指数数据 | stock_zh_index_spot_em | ❌ 限流 | 白天重试 |
+
+---
+
+## 晚间采集策略
+
+**推荐方案**：
+1. **白天（9:00-16:00）**：采集日K线和实时数据
+2. **晚间（22:00后）**：只采集股票列表+涨停数据
+3. **凌晨（02:00-06:00）**：批量采集历史数据
+
+---
+
+## 批量采集脚本框架
 
 ```python
 import akshare as ak
+import sqlite3
+from datetime import datetime
+import time
 
-# 获取所有A股股票列表
-df = ak.stock_info_a_code_name()
-# 返回: code, name, area, industry, market, list_date
-```
+def collect_daily():
+    """每日收盘后采集"""
+    # 1. 涨停股
+    df = ak.stock_zt_pool_em(date=datetime.now().strftime("%Y%m%d"))
+    save_to_db(df, "limit_up")
+    
+    # 2. 股票列表（每日更新）
+    df = ak.stock_info_a_code_name()
+    save_to_db(df, "stock_list")
 
-## 2. 日K线数据
-
-```python
-# 历史日K线
-df = ak.stock_zh_a_hist(
-    symbol="000001",      # 股票代码
-    start_date="20260401", # 开始日期
-    end_date="20260422",   # 结束日期
-    adjust="qfq"           # 前复权
-)
-# 返回: 日期, 开, 收, 高, 低, 成交量, 成交额, 振幅, 涨跌幅, 涨跌额, 换手率
-```
-
-## 3. 实时行情
-
-```python
-# 个股实时行情
-df = ak.stock_zh_a_spot_em()
-# 返回: 代码, 名称, 最新价, 涨跌幅, 成交量, 成交额, 开盘, 最高, 最低, 昨收...
-
-# 单只股票
-df = ak.stock_zh_a_spot_em(symbol="000001")
-```
-
-## 4. 实时分时
-
-```python
-# 分时数据
-df = ak.stock_zh_a_hist_min_em(
-    symbol="000001",
-    start_date="2026-04-22 09:30:00",
-    end_date="2026-04-22 15:00:00",
-    period="5"  # 5分钟
-)
-```
-
-## 5. 涨停板
-
-```python
-# 今日涨停股
-df = ak.stock_zt_pool_em(date="20260422")
-# 返回: 代码, 名称, 涨停价, 流通市值, 涨停统计...
-
-# 炸板股
-df = ak.stock_zt_pool_zbg_em(date="20260422")
-```
-
-## 6. 指数数据
-
-```python
-# 上证指数
-df = ak.stock_zh_index_spot_em(symbol="上证指数")
-
-# 沪深300
-df = ak.stock_zh_index_spot_em(symbol="沪深300")
-```
-
-## 7. 批量获取
-
-```python
-# 获取多只股票K线
-stocks = ["000001", "000002", "600000"]
-for code in stocks:
-    df = ak.stock_zh_a_hist(symbol=code, period="daily", adjust="qfq")
-    time.sleep(0.5)  # 避免限流
+def collect_kline白天():
+    """白天采集K线（每15分钟）"""
+    # 限流，间隔拉长
+    time.sleep(2)
+    df = ak.stock_zh_a_hist(symbol="000001", ...)
 ```
 
 ---
 
-## 注意事项
+## 主流数据源对比
 
-1. **限流**: 晚间22:00-02:00容易被限流，白天较好
-2. **重试**: 加 `time.sleep()` 延时，多次重试
-3. **复权**: `adjust="qfq"` 前复权，`adjust="hfq"` 后复权
-4. **存储**: 建议用SQLite，采集后直接入库
+| 数据源 | 优点 | 缺点 |
+|--------|------|------|
+| AKShare | 免费、中文文档全 | 晚间限流 |
+| Tushare Pro | 数据全面 | 需注册、有积分限制 |
+| 东方财富 | 实时性好 | 需登录 |
 
----
-
-## 测试记录
-
-| 接口 | 状态 | 时间 |
-|------|------|------|
-| stock_info_a_code_name | ✅ 成功 | 23:17 |
-| stock_zh_a_hist | ❌ 限流 | 23:xx |
-| stock_zh_a_spot_em | ❌ 限流 | 23:xx |
+**结论**: AKShare主力用，白天采集为主。
