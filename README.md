@@ -1,52 +1,83 @@
-# 老板量化交易系统 (Laoban Quant System)
+# 老板量化交易系统
 
-A股隔日超短交易支持系统
+> 个人A股隔日超短交易辅助系统
 
-## 架构
+## 系统架构
 
 ```
-┌───────────┐    ┌───────────┐    ┌───────────┐
-│  数据层   │ → │  策略层   │ → │  交互层   │
-│  (大龙)   │    │  (小爱)   │    │  (大龙)   │
-└───────────┘    └───────────┘    └───────────┘
+数据采集层          策略分析层          执行层
+─────────          ─────────          ──────
+AKShare/Tushare ──▶ SQLite ──▶ Python策略脚本 ──▶ 老板决策
+     │                                  │
+     └── 定时采集(cron)                 └── 预警推送
 ```
 
 ## 目录结构
 
 ```
 laoban-quant-system/
-├── data/               # 数据目录
-│   ├── daily/          # 日频数据
-│   ├── realtime/       # 实时数据
-│   └── historical/     # 历史数据
 ├── src/
-│   ├── data_fetcher/   # 数据抓取模块
-│   ├── strategy/       # 策略模块（小爱）
-│   ├── risk/           # 风控模块（小爱）
-│   └── alert/          # 预警推送模块
-├── tests/              # 单元测试
+│   ├── data_fetcher/    # 数据采集模块
+│   │   └── a_share_fetcher.py
+│   ├── strategy/        # 选股策略
+│   │   └── stock_selector.py
+│   └── risk/           # 风控模块
+│       └── fat_finger_guard.py
+├── data/
+│   ├── raw/            # 原始数据
+│   ├── clean/          # 清洗后数据
+│   └── database/       # SQLite数据库
+│       └── quant.db
+├── scripts/
+│   ├── data_collector.py    # AKShare数据采集
+│   └── daily_collection.sh  # 每日定时脚本
+├── logs/               # 日志
 ├── docs/               # 文档
-└── scripts/            # 工具脚本
+│   └── 数据库设计.md
+├── tests/              # 测试
+└── README.md
 ```
 
-## 核心功能
+## 快速开始
 
-1. **乌龙指防范**（紧急）
-   - 代码相似度提示
-   - 金额超限二次确认
-   - ST票特殊标识
+### 1. 安装依赖
+```bash
+pip install akshare tushare pandas sqlite3
+```
 
-2. **选股系统**
-   - 盘前候选池
-   - 盘中预警
-   - 量化资金识别
+### 2. 初始化数据库
+```bash
+python3 scripts/data_collector.py
+```
 
-3. **数据支持**
-   - 实时行情
-   - 板块资金流向
-   - 涨停/跌停统计
+### 3. 采集数据
+```bash
+# 采集股票列表
+python3 scripts/data_collector.py --mode stock_list
 
-## 协作
+# 采集日K线
+python3 scripts/data_collector.py --mode daily_kline --limit 100
+```
 
-- 小爱：策略逻辑、选股算法、风控规则
-- 大龙：数据接入、基础设施、QQ推送
+## 数据库表
+
+| 表名 | 说明 |
+|------|------|
+| stock_list | 股票列表(5508只) |
+| daily_kline | 日K线数据 |
+| limit_up_record | 涨停记录 |
+
+## 团队分工(V2.2)
+
+- **老板**: 实盘操作、决策
+- **小爱**: 策略设计、代码实现
+- **大龙**: 技术架构、数据工程
+- **小猪**: 数据清洗、辅助执行
+
+## TODO
+
+- [ ] AKShare数据接口调通
+- [ ] Tushare Pro数据接入
+- [ ] 选股策略V1实现
+- [ ] 乌龙指防范功能
+- [ ] 每日自动采集
