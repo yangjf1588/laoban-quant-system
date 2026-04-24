@@ -62,7 +62,7 @@ def ts_to_tx_symbol(ts_code):
 
 
 def save_daily_kline(ts_code, df):
-    """保存日K线数据到数据库"""
+    """保存日K线数据到数据库，并计算change/pct_chg"""
     if df is None or df.empty:
         return 0
 
@@ -70,28 +70,44 @@ def save_daily_kline(ts_code, df):
     cursor = conn.cursor()
     saved = 0
 
+    # 按日期排序，用于计算前一日收盘价
+    df = df.sort_values('date').reset_index(drop=True)
+    prev_close = None
+
     for _, row in df.iterrows():
         try:
             trade_date = str(row.get('date', ''))[:10]
             if not trade_date:
                 continue
 
+            close = float(row['close']) if pd.notna(row.get('close')) else None
+
+            # 计算涨跌幅
+            change_val = None
+            pct_chg_val = None
+            if close is not None and prev_close is not None and prev_close != 0:
+                change_val = close - prev_close
+                pct_chg_val = change_val / prev_close * 100
+
             cursor.execute("""
                 INSERT OR REPLACE INTO daily_kline
-                (ts_code, trade_date, open, high, low, close, volume, amount, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (ts_code, trade_date, open, high, low, close, volume, amount, change, pct_chg, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 ts_code,
                 trade_date,
                 float(row['open']) if pd.notna(row.get('open')) else None,
                 float(row['high']) if pd.notna(row.get('high')) else None,
                 float(row['low']) if pd.notna(row.get('low')) else None,
-                float(row['close']) if pd.notna(row.get('close')) else None,
-                None,  # volume - 腾讯接口无此字段
+                close,
+                None,  # volume
                 float(row['amount']) if pd.notna(row.get('amount')) else None,
+                change_val,
+                pct_chg_val,
                 datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             ))
             saved += 1
+            prev_close = close
         except Exception as e:
             continue
 
